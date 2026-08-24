@@ -4,13 +4,13 @@ A one-page birthday party. Open `index.html` over **localhost** (not as a file),
 
 ## Run it
 
-From this folder:
+Double-click `run.command`, or from this folder:
 
 ```bash
-python3 -m http.server 5173
+./run.sh
 ```
 
-Then open [http://localhost:5173](http://localhost:5173).
+That starts a local server and opens the site. Press Ctrl+C in the terminal to stop.
 
 ## How it goes
 
