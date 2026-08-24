@@ -28,3 +28,13 @@ Nothing from the camera is recorded or sent anywhere — it stays in this tab so
 By default the page synthesises the Happy Birthday melody.
 
 To use your own track, save a file you have the rights to as `song.mp3` in this folder.
+
+## Deploy on Vercel
+
+`index.html` is at the **repo root**. Import [the GitHub repo](https://github.com/akhilmishr13/happy-birthday-upasana) at [vercel.com/new](https://vercel.com/new):
+
+- Framework Preset: **Other**
+- Root Directory: leave empty
+- Build Command: leave empty
+- Output Directory: leave empty
+
