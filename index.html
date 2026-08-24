@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#1A1024">
 
 <meta property="og:title" content="Happy Birthday, Upasana">
-<meta property="og:description" content="Open this. There's a cake, and it's for you.">
+<meta property="og:description" content="Come in. The candles are already lit.">
 <meta property="og:type" content="website">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -49,9 +49,10 @@
   <div class="table"></div>
   <div class="vignette"></div>
   <div class="glow" id="glow"></div>
+  <div class="sunfield" id="sunfield" aria-hidden="true"></div>
 </div>
 
-<canvas id="scene3d"></canvas>
+<canvas id="scene3d" class="cake-canvas"></canvas>
 <canvas id="fx" aria-hidden="true"></canvas>
 <div class="confetti" id="confetti" aria-hidden="true"></div>
 <div class="sparkle-burst" id="sparkleBurst" aria-hidden="true"></div>
@@ -121,12 +122,32 @@
 </div>
 
 <section class="gate scene--on" id="gate">
-  <p class="gate__kicker">a tiny party, just for you</p>
+  <p class="gate__kicker">with love, tonight</p>
   <h2 class="gate__title">Happy Birthday,<br><em>Upasana</em></h2>
-  <p class="gate__copy">There's a cake waiting. You'll need the camera so you can blow the candles out for real.</p>
   <button class="btn btn--solid" id="enterBtn">Come in</button>
-  <p class="gate__note">Camera + microphone, only in this tab. Nothing is recorded or sent anywhere.</p>
+  <p class="gate__note">The camera is only so you can blow the candles. Later, a spoken wish is recorded and sent to me.</p>
 </section>
+
+<section class="wish-panel" id="wishPanel" hidden>
+  <p class="wish-panel__kicker">before the knife</p>
+  <h3 class="wish-panel__title">Make a wish</h3>
+  <p class="wish-panel__copy">Say it out loud. I will keep it safe.</p>
+  <button class="btn btn--solid rec-btn" id="recBtn">Start recording</button>
+  <p class="wish-panel__status" id="recStatus"></p>
+  <button class="btn btn--ghost" id="skipWish">Cut without recording</button>
+</section>
+
+<button class="mail" id="mailBtn" hidden aria-label="Open your card">
+  <span class="mail__seal">♥</span>
+  <span class="mail__label">a card</span>
+</button>
+
+<div class="letter-overlay" id="letter" hidden>
+  <button class="letter" id="letterCard" aria-label="Close the card">
+    <p class="letter__line">Happy birthday Upasana</p>
+    <p class="letter__love">I love you</p>
+  </button>
+</div>
 
 <script type="module" src="main.js"></script>
 </body>

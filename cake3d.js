@@ -127,6 +127,7 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
   scene.add(candleLight);
 
   const party = new THREE.Group();
+  party.position.y = -2.55;
   scene.add(party);
 
   // stand
@@ -520,10 +521,27 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
     return Math.min(n, remaining.length);
   }
 
+  function revealCake() {
+    const start = performance.now();
+    const from = party.position.y;
+    const dur = 1600;
+    return new Promise(resolve => {
+      function tick(now) {
+        const k = Math.min(1, (now - start) / dur);
+        const e = 1 - Math.pow(1 - k, 3);
+        party.position.y = from + (0 - from) * e;
+        if (k < 1) requestAnimationFrame(tick);
+        else resolve();
+      }
+      requestAnimationFrame(tick);
+    });
+  }
+
   function cutCake() {
-    if (cutting) return;
+    if (cutting) return Promise.resolve();
     cutting = true;
     controls.autoRotate = false;
+    controls.enableRotate = false;
 
     frostingClip.clippingPlanes = [clipA, clipB];
     cakeGroup.add(radialFace(-sliceAngle / 2, innerCake));
@@ -531,17 +549,27 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
 
     sliceGroup.visible = true;
     const start = performance.now();
-    const dur = 1100;
-    function slide(now) {
-      const k = Math.min(1, (now - start) / dur);
-      const e = 1 - Math.pow(1 - k, 3);
-      sliceGroup.position.set(e * 0.55, e * 0.12, e * 0.85);
-      sliceGroup.rotation.z = e * 0.18;
-      sliceGroup.rotation.x = e * 0.08;
-      if (k < 1) requestAnimationFrame(slide);
-    }
-    requestAnimationFrame(slide);
-    celebrating = true;
+    const dur = 2100;
+    return new Promise(resolve => {
+      function slide(now) {
+        const k = Math.min(1, (now - start) / dur);
+        const e = k < 0.5
+          ? 4 * k * k * k
+          : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        const lift = Math.sin(e * Math.PI) * 0.22;
+        sliceGroup.position.set(e * 1.05, 0.02 + lift, e * 0.42);
+        sliceGroup.rotation.y = e * 0.42;
+        sliceGroup.rotation.z = e * 0.1;
+        sliceGroup.rotation.x = e * 0.06;
+        if (k < 1) requestAnimationFrame(slide);
+        else {
+          celebrating = true;
+          controls.enableRotate = true;
+          resolve();
+        }
+      }
+      requestAnimationFrame(slide);
+    });
   }
 
   function loop() {
@@ -581,6 +609,7 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
     blowOut,
     blowOutAll,
     cutCake,
+    revealCake,
     getLit: () => lit,
     dispose() {
       running = false;
