@@ -117,6 +117,7 @@
   <div class="controls">
     <button class="btn btn--ghost" id="tapBlowBtn" hidden>Tap to blow</button>
     <button class="btn btn--solid" id="cutBtn" hidden>Cut the cake</button>
+    <button class="btn btn--ghost" id="refreshBtn" hidden>Refresh</button>
   </div>
   <p class="status" id="status"></p>
 </div>
@@ -125,17 +126,12 @@
   <p class="gate__kicker">with love, tonight</p>
   <h2 class="gate__title">Happy Birthday,<br><em>Upasana</em></h2>
   <button class="btn btn--solid" id="enterBtn">Come in</button>
-  <p class="gate__note">The camera is only so you can blow the candles. Later, a spoken wish is recorded and sent to me.</p>
 </section>
 
-<section class="wish-panel" id="wishPanel" hidden>
-  <p class="wish-panel__kicker">before the knife</p>
-  <h3 class="wish-panel__title">Make a wish</h3>
-  <p class="wish-panel__copy">Say it out loud. I will keep it safe.</p>
-  <button class="btn btn--solid rec-btn" id="recBtn">Start recording</button>
-  <p class="wish-panel__status" id="recStatus"></p>
-  <button class="btn btn--ghost" id="skipWish">Cut without recording</button>
-</section>
+<button class="wish-btn" id="recBtn" hidden aria-label="Record a wish">
+  <span class="wish-btn__mic">🎙️</span>
+  <span class="wish-btn__label" id="recLabel">make a wish</span>
+</button>
 
 <button class="mail" id="mailBtn" hidden aria-label="Open your card">
   <span class="mail__seal">♥</span>

@@ -16,7 +16,7 @@ That starts a local server and opens the site. Press Ctrl+C in the terminal to s
 
 1. Tap **Come in** and allow camera + microphone.
 2. Make an **O** with your lips and blow at the screen.
-3. The 28 candles go out, and *Happy Birthday* plays.
+3. The 29 candles go out, and *Happy Birthday* plays.
 4. Cut the cake.
 
 If the camera is declined, tap the cake (or **Tap to blow**) instead. Spacebar also works.

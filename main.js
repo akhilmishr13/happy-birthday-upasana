@@ -18,26 +18,15 @@ let recStream = null;
 decorateRoom();
 plantSunflowers();
 
-if (sessionStorage.getItem('hb-upasana')) showSunfield();
-sessionStorage.setItem('hb-upasana', '1');
-
 $('enterBtn').addEventListener('click', enter);
-$('cutBtn').addEventListener('click', askWish);
+$('cutBtn').addEventListener('click', () => doCut());
+$('refreshBtn').addEventListener('click', () => {
+  showSunfield();
+  $('refreshBtn').hidden = true;
+  say('A sunflower field…');
+});
 $('tapBlowBtn').addEventListener('click', () => tryBlow(1));
 $('recBtn').addEventListener('click', toggleRecord);
-$('skipWish').addEventListener('click', () => {
-  if (recorder && recorder.state === 'recording') {
-    recorder.onstop = () => {
-      recStream?.getTracks().forEach(t => t.stop());
-      recStream = null;
-      recorder = null;
-      finishWish(null);
-    };
-    recorder.stop();
-    return;
-  }
-  finishWish(null);
-});
 $('mailBtn').addEventListener('click', () => {
   $('letter').hidden = false;
   $('letter').classList.add('is-on');
@@ -218,26 +207,19 @@ function onAllOut() {
   $('status').textContent = '';
   document.documentElement.style.setProperty('--mouth', '0');
 
-  showSunfield();
   startSong();
   $('soundToggle').hidden = false;
 
   say(`Happy birthday, ${NAME}! 🎂`);
   setPrompt(`Happy birthday, <em>${NAME}</em>.`);
   $('cutBtn').hidden = false;
+  $('refreshBtn').hidden = false;
+  $('recBtn').hidden = false;
+  requestAnimationFrame(() => $('recBtn').classList.add('is-in'));
+  say('Make a wish, then cut.');
   confetti(90);
   fireworks.show(5);
   sparkles();
-}
-
-function askWish() {
-  if (phase !== 'out') return;
-  phase = 'wishing';
-  $('cutBtn').hidden = true;
-  $('wishPanel').hidden = false;
-  $('wishPanel').classList.add('is-on');
-  say('Make a wish first.');
-  setPrompt('Make a wish, then say it out loud.');
 }
 
 async function toggleRecord() {
@@ -246,15 +228,14 @@ async function toggleRecord() {
     return;
   }
 
-  $('recStatus').textContent = 'Listening…';
-  $('recBtn').textContent = 'Stop recording';
+  $('recLabel').textContent = 'listening…';
   $('recBtn').classList.add('is-hot');
+  say('Say your wish out loud.');
 
   try {
     recStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
-    $('recStatus').textContent = 'Mic blocked — you can still cut';
-    $('recBtn').textContent = 'Start recording';
+    $('recLabel').textContent = 'mic blocked';
     $('recBtn').classList.remove('is-hot');
     return;
   }
@@ -263,33 +244,25 @@ async function toggleRecord() {
   const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
   recorder = mime ? new MediaRecorder(recStream, { mimeType: mime }) : new MediaRecorder(recStream);
   recorder.ondataavailable = e => { if (e.data.size) recChunks.push(e.data); };
-  recorder.onstop = () => {
-    recStream.getTracks().forEach(t => t.stop());
+  recorder.onstop = async () => {
+    recStream?.getTracks().forEach(t => t.stop());
     recStream = null;
     $('recBtn').classList.remove('is-hot');
-    $('recBtn').textContent = 'Start recording';
     const blob = new Blob(recChunks, { type: recorder.mimeType || 'audio/webm' });
-    finishWish(blob);
+    recorder = null;
+    if (blob && blob.size > 200) {
+      $('recLabel').textContent = 'sending…';
+      say('I heard it. Sending it now.');
+      await sendWish(blob);
+      $('recLabel').textContent = 'wish sent';
+    } else {
+      $('recLabel').textContent = 'make a wish';
+    }
   };
   recorder.start();
   setTimeout(() => {
     if (recorder && recorder.state === 'recording') recorder.stop();
   }, 12000);
-}
-
-async function finishWish(blob) {
-  if (phase !== 'wishing') return;
-  phase = 'cutting';
-  $('wishPanel').classList.remove('is-on');
-  $('wishPanel').hidden = true;
-  if (blob && blob.size > 200) {
-    $('recStatus').textContent = 'Sending your wish…';
-    say('I heard it. Sending it now.');
-    await sendWish(blob);
-  } else {
-    say('Alright — time to cut.');
-  }
-  await doCut();
 }
 
 async function sendWish(blob) {
@@ -323,7 +296,7 @@ async function sendWish(blob) {
 }
 
 async function doCut() {
-  if (!party || (phase !== 'wishing' && phase !== 'out' && phase !== 'cutting')) return;
+  if (!party || (phase !== 'out' && phase !== 'wishing')) return;
   phase = 'cut';
   $('knife').classList.add('go');
   say('One slice, coming up.');

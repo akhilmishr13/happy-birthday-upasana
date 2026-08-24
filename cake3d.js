@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-const CANDLE_COUNT = 28;
+const CANDLE_COUNT = 29;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function noiseTexture(size, base, amp) {
@@ -388,9 +388,6 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
   sliceGroup.visible = false;
   cakeGroup.add(sliceGroup);
 
-  const clipA = new THREE.Plane(new THREE.Vector3(Math.sin(-sliceAngle / 2), 0, -Math.cos(-sliceAngle / 2)), 0);
-  const clipB = new THREE.Plane(new THREE.Vector3(-Math.sin(sliceAngle / 2), 0, Math.cos(sliceAngle / 2)), 0);
-
   // ── candles ──
   const candleBodyGeo = new THREE.CylinderGeometry(0.018, 0.022, 1, 10);
   const wickGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.045, 6);
@@ -415,8 +412,8 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
 
   const candles = [];
   const placements = [];
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2 + 0.05;
+  for (let i = 0; i < 17; i++) {
+    const a = (i / 17) * Math.PI * 2 + 0.05;
     placements.push({ x: Math.cos(a) * 0.92, z: Math.sin(a) * 0.92, h: 0.22 + (i % 5) * 0.012 });
   }
   for (let i = 0; i < 12; i++) {
@@ -543,24 +540,19 @@ export async function createPartyScene(canvas, { onGlow } = {}) {
     controls.autoRotate = false;
     controls.enableRotate = false;
 
-    frostingClip.clippingPlanes = [clipA, clipB];
-    cakeGroup.add(radialFace(-sliceAngle / 2, innerCake));
-    cakeGroup.add(radialFace(sliceAngle / 2, creamFill));
-
     sliceGroup.visible = true;
     const start = performance.now();
-    const dur = 2100;
+    const dur = 1800;
     return new Promise(resolve => {
       function slide(now) {
         const k = Math.min(1, (now - start) / dur);
         const e = k < 0.5
           ? 4 * k * k * k
           : 1 - Math.pow(-2 * k + 2, 3) / 2;
-        const lift = Math.sin(e * Math.PI) * 0.22;
-        sliceGroup.position.set(e * 1.05, 0.02 + lift, e * 0.42);
-        sliceGroup.rotation.y = e * 0.42;
-        sliceGroup.rotation.z = e * 0.1;
-        sliceGroup.rotation.x = e * 0.06;
+        const lift = Math.sin(Math.min(e, 1) * Math.PI) * 0.16;
+        sliceGroup.position.set(e * 0.85, 0.04 + lift, e * 0.95);
+        sliceGroup.rotation.y = e * 0.22;
+        sliceGroup.rotation.z = e * 0.08;
         if (k < 1) requestAnimationFrame(slide);
         else {
           celebrating = true;

@@ -608,41 +608,44 @@ body.is-sunfield .btn--ghost{
   50%{ transform: scale(var(--s, 1)) rotate(7deg); }
 }
 
-/* ── wish panel ─────────────────────────────── */
+/* ── wish side button ───────────────────────── */
 
-.wish-panel{
-  position: fixed; inset: 0; z-index: 18;
-  display: none;
-  place-items: center;
-  text-align: center;
-  padding: 28px;
-  background: rgba(12,6,18,.72);
-  backdrop-filter: blur(10px);
+.wish-btn{
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left));
+  top: 38%;
+  z-index: 8;
+  width: 76px;
+  padding: 14px 8px 12px;
+  border: 0; cursor: pointer;
+  background: linear-gradient(180deg, #f7efe4, #ead7b8);
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.35);
+  transform: translateX(-140%) rotate(-8deg);
+  transition: transform .9s cubic-bezier(.2,.8,.2,1.1), box-shadow .2s ease, background .2s ease;
+  color: #5a3a28;
 }
-.wish-panel.is-on{ display: grid; animation: rise .5s ease both; }
-.wish-panel__kicker{
-  font-size: .68rem; letter-spacing: .32em; text-transform: uppercase;
-  color: rgba(251,243,234,.5); margin-bottom: 10px;
+.wish-btn.is-in{
+  transform: translateX(0) rotate(3deg);
+  animation: wishbob 2.6s ease-in-out infinite;
 }
-.wish-panel__title{
-  font-family: var(--font-script); font-size: clamp(2.4rem, 10vw, 3.6rem);
-  color: var(--gold); font-weight: 400; line-height: 1;
+.wish-btn.is-hot{
+  background: linear-gradient(180deg, #f4b8c5, #e0899a);
+  box-shadow: 0 0 0 5px rgba(224,137,154,.35), 0 12px 28px rgba(0,0,0,.35);
+  color: #fff;
 }
-.wish-panel__copy{
-  font-family: var(--font-display); font-size: 1.15rem;
-  margin: 10px auto 26px; max-width: 320px;
-  color: rgba(251,243,234,.82);
+.wish-btn__mic{ display: block; font-size: 1.35rem; line-height: 1; }
+.wish-btn__label{
+  display: block;
+  margin-top: 8px;
+  font-size: .55rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-family: var(--font-ui);
 }
-.rec-btn.is-hot{
-  background: #e0899a;
-  box-shadow: 0 0 0 6px rgba(224,137,154,.28);
-  animation: recpulse 1s ease-in-out infinite;
-}
-@keyframes recpulse{ 50%{ transform: scale(1.04) } }
-.wish-panel__status{
-  margin: 14px 0 18px;
-  font-size: .78rem; letter-spacing: .12em; text-transform: uppercase;
-  color: rgba(251,243,234,.55); min-height: 1.2em;
+@keyframes wishbob{
+  0%,100%{ transform: translateX(0) rotate(3deg) translateY(0); }
+  50%{ transform: translateX(0) rotate(1deg) translateY(-7px); }
 }
 
 /* ── love card ──────────────────────────────── */
