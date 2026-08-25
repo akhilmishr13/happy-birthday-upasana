@@ -726,9 +726,37 @@ body.is-sunfield .btn--ghost{
 /* ── small screens ──────────────────────────── */
 
 @media (max-width: 720px){
-  .buddy{ width: 112px; }
-  .mirror__ring{ width: 88px; height: 88px; }
-  .hud{ width: min(360px, calc(100% - 24px)); top: 22vh; }
+  .buddy{ width: 78px; }
+  .bubble{ font-size: .86rem; max-width: 130px; padding: 8px 10px; }
+  .mirror__ring{ width: 56px; height: 56px; padding: 3px; }
+  .mirror__label{ font-size: .48rem; margin-top: 4px; }
+  .hud{ width: min(360px, calc(100% - 16px)); top: 20vh; }
+  .prompt{ font-size: 1rem; }
+  .controls{
+    gap: 6px;
+    min-height: 0;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    width: min(280px, calc(100% - 28px));
+  }
+  .btn{
+    font-size: .62rem;
+    letter-spacing: .08em;
+    padding: 7px 12px;
+  }
+  .sound-toggle{ width: 30px; height: 30px; font-size: .8rem; }
+  .wish-btn{
+    width: 52px;
+    padding: 8px 4px 8px;
+    top: 32%;
+    border-radius: 14px;
+  }
+  .wish-btn__mic{ font-size: .95rem; }
+  .wish-btn__label{ font-size: .42rem; margin-top: 4px; letter-spacing: .06em; }
+  .mail{ width: 48px; height: 58px; top: 34%; }
+  .mail::before{ height: 28px; }
+  .mail__seal{ width: 16px; height: 16px; line-height: 16px; top: 18px; font-size: .55rem; }
+  .mail__label{ font-size: .42rem; bottom: 6px; }
   .window{ display: none; }
   .frames{ display: none; }
   .bouquet{ display: none; }

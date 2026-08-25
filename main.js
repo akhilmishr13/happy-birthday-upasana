@@ -1,4 +1,5 @@
 import { createPartyScene } from './cake3d.js';
+import { pickCakeStyle } from './cakes.js';
 import { startBlowDetector } from './blow.js';
 import { startSong, toggleMute } from './music.js';
 import { WISH_EMAIL } from './config.js';
@@ -20,11 +21,7 @@ plantSunflowers();
 
 $('enterBtn').addEventListener('click', enter);
 $('cutBtn').addEventListener('click', () => doCut());
-$('refreshBtn').addEventListener('click', () => {
-  showSunfield();
-  $('refreshBtn').hidden = true;
-  say('A sunflower field…');
-});
+$('refreshBtn').addEventListener('click', () => refreshParty());
 $('tapBlowBtn').addEventListener('click', () => tryBlow(1));
 $('recBtn').addEventListener('click', toggleRecord);
 $('mailBtn').addEventListener('click', () => {
@@ -114,11 +111,7 @@ async function enter() {
   fireworks.startAmbient();
 
   try {
-    party = await createPartyScene($('scene3d'), {
-      onGlow(t) {
-        document.documentElement.style.setProperty('--glow', t.toFixed(3));
-      }
-    });
+    party = await spawnCake({ unlit: false });
   } catch (err) {
     $('status').textContent = 'Could not start the 3D cake. Try another browser.';
     console.error(err);
@@ -139,7 +132,7 @@ async function enter() {
 
   $('tapBlowBtn').hidden = false;
   phase = 'lit';
-  say('The cake is here… blow!');
+  say(`Tonight: ${party.style.name}. Blow!`);
   setPrompt('Make an <em>O</em> with your lips, and blow.');
 
   startCamera();
@@ -175,7 +168,7 @@ async function startCamera() {
   detector = result;
   if (result?.ready) {
     $('mirror').hidden = false;
-    $('tapBlowBtn').hidden = false;
+    if (phase === 'lit') $('tapBlowBtn').hidden = false;
     if (result.visionOk) {
       say('I can see you! Make an O, then blow 💨');
     } else {
@@ -203,6 +196,7 @@ function onAllOut() {
   if (phase !== 'extinguishing') return;
   phase = 'out';
   detector?.stop?.();
+  $('tapBlowBtn').hidden = true;
   $('mirrorLabel').textContent = 'Wish made';
   $('status').textContent = '';
   document.documentElement.style.setProperty('--mouth', '0');
@@ -212,7 +206,7 @@ function onAllOut() {
 
   say(`Happy birthday, ${NAME}! 🎂`);
   setPrompt(`Happy birthday, <em>${NAME}</em>.`);
-  $('cutBtn').hidden = false;
+  $('cutBtn').hidden = !party?.supportsCut;
   $('refreshBtn').hidden = false;
   $('recBtn').hidden = false;
   requestAnimationFrame(() => $('recBtn').classList.add('is-in'));
@@ -295,9 +289,51 @@ async function sendWish(blob) {
   }
 }
 
+async function spawnCake({ unlit = false } = {}) {
+  const style = pickCakeStyle();
+  party?.dispose();
+  party = await createPartyScene($('scene3d'), {
+    style,
+    unlit,
+    onGlow(t) {
+      document.documentElement.style.setProperty('--glow', t.toFixed(3));
+    }
+  });
+  document.body.dataset.cake = party.style.name;
+  document.body.dataset.cut = party.supportsCut ? '1' : '0';
+  return party;
+}
+
+function syncCutButton() {
+  const canShow = party?.supportsCut && (phase === 'out' || phase === 'wishing' || phase === 'cut' || phase === 'party');
+  $('cutBtn').hidden = !canShow;
+}
+
+async function refreshParty() {
+  if (!party || phase === 'gate' || phase === 'lit' || phase === 'extinguishing') return;
+  showSunfield();
+  $('knife').classList.remove('go');
+  $('refreshBtn').disabled = true;
+  try {
+    party = await spawnCake({ unlit: true });
+    $('scene3d').classList.add('is-in');
+    await party.revealCake();
+    syncCutButton();
+    say(`${party.style.name} — and sunflowers.`);
+    setPrompt(`Happy birthday, <em>${NAME}</em>.`);
+  } catch (err) {
+    console.error(err);
+    $('status').textContent = 'Could not swap the cake.';
+  } finally {
+    $('refreshBtn').disabled = false;
+  }
+}
+
 async function doCut() {
-  if (!party || (phase !== 'out' && phase !== 'wishing')) return;
+  if (!party?.supportsCut || (phase !== 'out' && phase !== 'wishing' && phase !== 'party')) return;
   phase = 'cut';
+  $('knife').classList.remove('go');
+  void $('knife').offsetWidth;
   $('knife').classList.add('go');
   say('One slice, coming up.');
   setPrompt('Watch…');
