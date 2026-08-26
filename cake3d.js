@@ -1,28 +1,68 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { pickCakeStyle } from './cakes.js';
 
 const CANDLE_COUNT = 29;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-function noiseTexture(size, base, amp) {
-  const c = document.createElement('canvas');
-  c.width = c.height = size;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, size, size);
-  const img = ctx.getImageData(0, 0, size, size);
-  for (let i = 0; i < img.data.length; i += 4) {
-    const n = (Math.random() - 0.5) * amp;
-    img.data[i] = Math.min(255, Math.max(0, img.data[i] + n));
-    img.data[i + 1] = Math.min(255, Math.max(0, img.data[i + 1] + n));
-    img.data[i + 2] = Math.min(255, Math.max(0, img.data[i + 2] + n));
+function hash(n) {
+  const s = Math.sin(n * 127.1) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function n3(x, y, z) {
+  return hash(x * 12.9898 + y * 78.233 + z * 37.719) * 2 - 1;
+}
+
+function hexRgb(hex) {
+  const n = hex.replace('#', '');
+  return {
+    r: parseInt(n.slice(0, 2), 16),
+    g: parseInt(n.slice(2, 4), 16),
+    b: parseInt(n.slice(4, 6), 16)
+  };
+}
+
+function frostingTextures(hex) {
+  const size = 512;
+  const { r, g, b } = hexRgb(hex);
+  const color = document.createElement('canvas');
+  const bump = document.createElement('canvas');
+  color.width = color.height = bump.width = bump.height = size;
+  const cctx = color.getContext('2d');
+  const bctx = bump.getContext('2d');
+  const cimg = cctx.createImageData(size, size);
+  const bimg = bctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const u = x / size;
+      const v = y / size;
+      const swirl = Math.sin((u - 0.5) * 10 + Math.sin((v - 0.5) * 8) * 1.6);
+      const spatula = Math.sin(v * 22 + Math.sin(u * 6) * 1.2);
+      const grain = n3(x * 0.08, y * 0.08, 2.1);
+      const grain2 = n3(x * 0.18, y * 0.16, 8.4);
+      const tone = swirl * 4 + spatula * 3 + grain * 5 + grain2 * 3;
+      cimg.data[i] = Math.min(255, Math.max(0, r + tone));
+      cimg.data[i + 1] = Math.min(255, Math.max(0, g + tone * 0.92));
+      cimg.data[i + 2] = Math.min(255, Math.max(0, b + tone * 0.85));
+      cimg.data[i + 3] = 255;
+      const bumpV = 128 + swirl * 18 + spatula * 22 + grain * 28;
+      bimg.data[i] = bimg.data[i + 1] = bimg.data[i + 2] = Math.min(255, Math.max(0, bumpV));
+      bimg.data[i + 3] = 255;
+    }
   }
-  ctx.putImageData(img, 0, 0);
-  const tex = new THREE.CanvasTexture(c);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
+  cctx.putImageData(cimg, 0, 0);
+  bctx.putImageData(bimg, 0, 0);
+  const map = new THREE.CanvasTexture(color);
+  const bumpMap = new THREE.CanvasTexture(bump);
+  map.wrapS = map.wrapT = bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
+  bumpMap.anisotropy = 4;
+  return { map, bumpMap };
 }
 
 function marbleTexture() {
@@ -30,24 +70,49 @@ function marbleTexture() {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = '#f4eee6';
+  ctx.fillStyle = '#f3ebe0';
   ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = 'rgba(160,140,130,.28)';
-  ctx.lineWidth = 1.4;
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 22; i++) {
+    ctx.strokeStyle = `rgba(150,128,118,${0.12 + hash(i) * 0.18})`;
+    ctx.lineWidth = 0.8 + hash(i + 4) * 1.6;
     ctx.beginPath();
-    let x = Math.random() * size;
+    let x = hash(i * 3) * size;
     let y = 0;
     ctx.moveTo(x, y);
     while (y < size) {
-      x += (Math.random() - 0.5) * 28;
-      y += 18;
+      x += (hash(x * 0.01 + y) - 0.5) * 32;
+      y += 14;
       ctx.lineTo(x, y);
     }
     ctx.stroke();
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function spongeTexture(hex) {
+  const size = 256;
+  const { r, g, b } = hexRgb(hex);
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const crumb = n3(x * 0.4, y * 0.4, 1) * 22;
+      const pore = n3(x * 0.9, y * 0.9, 4) > 0.55 ? -28 : 0;
+      img.data[i] = Math.min(255, Math.max(0, r + crumb + pore));
+      img.data[i + 1] = Math.min(255, Math.max(0, g + crumb + pore));
+      img.data[i + 2] = Math.min(255, Math.max(0, b + crumb * 0.8 + pore));
+      img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   return tex;
 }
 
@@ -62,49 +127,169 @@ function teardrop(w, h, segs = 12) {
   return new THREE.LatheGeometry(pts, segs);
 }
 
-function dripGeo() {
-  const pts = [
-    new THREE.Vector2(0.0, 0.0),
-    new THREE.Vector2(0.05, 0.0),
-    new THREE.Vector2(0.048, -0.04),
-    new THREE.Vector2(0.03, -0.12),
-    new THREE.Vector2(0.018, -0.2),
-    new THREE.Vector2(0.012, -0.28),
-    new THREE.Vector2(0.0, -0.32)
-  ];
-  return new THREE.LatheGeometry(pts, 10);
+function dripGeo(len, width) {
+  const pts = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    const y = -t * len;
+    let w = width * (1 - t * 0.62) * (0.92 + Math.sin(t * 9) * 0.08);
+    if (t > 0.78) {
+      const k = (t - 0.78) / 0.22;
+      w = width * 0.22 + width * 0.38 * Math.sin(k * Math.PI);
+    }
+    pts.push(new THREE.Vector2(Math.max(0.004, w), y));
+  }
+  return new THREE.LatheGeometry(pts, 12);
+}
+
+function organicize(geo, { radial = 0.008, height = 0.004, seed = 1.7, lockBottom = true } = {}) {
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const n = n3(v.x * 2.2 + seed, v.y * 3.1, v.z * 2.2);
+    const n2 = n3(v.x * 5.1, v.y * 4.4 + seed, v.z * 5.1);
+    const r = Math.hypot(v.x, v.z) || 1;
+    let rad = radial;
+    let ht = height;
+    if (lockBottom && v.y < 0.025) {
+      rad *= 0.1;
+      ht = 0;
+    }
+    v.x += (v.x / r) * n * rad;
+    v.z += (v.z / r) * n * rad;
+    v.y += n2 * ht;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function cakeProfile(R, H, { top = 1, bot = 1.03, bulge = 0.05 } = {}) {
+  const pts = [];
+  const botR = R * bot;
+  const topR = R * top;
+  const rim = Math.min(0.095, H * 0.26);
+  const dome = Math.min(0.05, H * 0.12);
+
+  pts.push(new THREE.Vector2(0.001, 0));
+  pts.push(new THREE.Vector2(botR - rim * 1.15, 0));
+  for (let i = 1; i <= 5; i++) {
+    const a = (i / 5) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(
+      botR - rim + Math.sin(a) * rim,
+      (1 - Math.cos(a)) * rim * 0.42
+    ));
+  }
+  const side0 = rim * 0.42;
+  const side1 = H - rim;
+  for (let i = 1; i <= 12; i++) {
+    const t = i / 12;
+    const y = side0 + t * (side1 - side0);
+    const swell = Math.sin(t * Math.PI) * R * bulge;
+    pts.push(new THREE.Vector2(botR * (1 - t) + topR * t + swell, y));
+  }
+  for (let i = 1; i <= 7; i++) {
+    const a = (i / 7) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(
+      topR - (1 - Math.cos(a)) * rim,
+      (H - rim) + Math.sin(a) * rim
+    ));
+  }
+  const innerR = Math.max(0.08, topR - rim);
+  for (let i = 1; i <= 8; i++) {
+    const t = i / 8;
+    const r = innerR * (1 - t);
+    const y = H + dome * (1 - (r / innerR) ** 2);
+    pts.push(new THREE.Vector2(Math.max(0.001, r), y));
+  }
+  return pts;
+}
+
+function roundCakeGeometry(R, H, opts = {}) {
+  const pts = cakeProfile(R, H, opts);
+  const geo = new THREE.LatheGeometry(pts, 96);
+  return organicize(geo, { radial: R * 0.008, height: 0.005, seed: R * 9 + H });
+}
+
+function ganacheDome(R, y) {
+  const pts = [];
+  const dome = 0.035;
+  const rim = 0.05;
+  pts.push(new THREE.Vector2(0.001, dome));
+  for (let i = 1; i <= 10; i++) {
+    const t = i / 10;
+    const r = (R - rim) * t;
+    pts.push(new THREE.Vector2(r, dome * (1 - t * t) + 0.006));
+  }
+  for (let i = 1; i <= 5; i++) {
+    const a = (i / 5) * (Math.PI / 2);
+    pts.push(new THREE.Vector2(R - rim + Math.sin(a) * rim, 0.006 + Math.cos(a) * 0.02));
+  }
+  const geo = new THREE.LatheGeometry(pts, 64);
+  geo.translate(0, y, 0);
+  return organicize(geo, { radial: 0.01, height: 0.006, seed: 3.3, lockBottom: false });
+}
+
+function icingRope(radius, y, tubeR, closed = true) {
+  const pts = [];
+  const n = 90;
+  for (let i = 0; i <= n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const wobble = 1 + Math.sin(a * 16) * 0.018 + n3(Math.cos(a), 1.2, Math.sin(a)) * 0.014;
+    pts.push(new THREE.Vector3(
+      Math.cos(a) * radius * wobble,
+      y + Math.sin(a * 20) * 0.014,
+      Math.sin(a) * radius * wobble
+    ));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts, closed);
+  return new THREE.TubeGeometry(curve, n, tubeR, 12, closed);
 }
 
 function heartGeometry(s, h) {
   const shape = new THREE.Shape();
-  shape.moveTo(0, s * 0.32);
-  shape.bezierCurveTo(s * 0.15, s * 0.72, s * 0.85, s * 0.55, s * 0.72, s * 0.05);
-  shape.bezierCurveTo(s * 0.55, -s * 0.35, s * 0.12, -s * 0.7, 0, -s * 0.92);
-  shape.bezierCurveTo(-s * 0.12, -s * 0.7, -s * 0.55, -s * 0.35, -s * 0.72, s * 0.05);
-  shape.bezierCurveTo(-s * 0.85, s * 0.55, -s * 0.15, s * 0.72, 0, s * 0.32);
+  shape.moveTo(0, -s * 0.42);
+  shape.bezierCurveTo(0, -s * 0.18, -s * 0.52, s * 0.08, -s * 0.5, s * 0.36);
+  shape.bezierCurveTo(-s * 0.5, s * 0.62, -s * 0.22, s * 0.74, 0, s * 0.5);
+  shape.bezierCurveTo(s * 0.22, s * 0.74, s * 0.5, s * 0.62, s * 0.5, s * 0.36);
+  shape.bezierCurveTo(s * 0.52, s * 0.08, 0, -s * 0.18, 0, -s * 0.42);
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: h,
     bevelEnabled: true,
-    bevelThickness: 0.03,
-    bevelSize: 0.03,
-    bevelSegments: 2
+    bevelThickness: 0.08,
+    bevelSize: 0.075,
+    bevelSegments: 6,
+    curveSegments: 28
   });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, h / 2, 0);
-  return geo;
+  return organicize(geo, { radial: 0.012, height: 0.008, seed: 4.4 });
 }
 
-function frostingMat(style) {
-  return new THREE.MeshPhysicalMaterial({
-    map: noiseTexture(512, style.hex, 14),
-    color: style.frosting,
-    roughness: 0.38,
-    metalness: 0.02,
-    clearcoat: 0.42,
-    clearcoatRoughness: 0.38,
-    sheen: 0.4,
-    sheenColor: new THREE.Color(style.sheen)
-  });
+function bundtGeometry(R, H) {
+  const geo = new THREE.TorusGeometry(R * 0.58, H * 0.36, 28, 72);
+  geo.rotateX(Math.PI / 2);
+  const pos = geo.attributes.position;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const theta = Math.atan2(v.z, v.x);
+    const flute = 0.055 * Math.sin(theta * 12);
+    const fade = THREE.MathUtils.smoothstep(Math.hypot(v.x, v.z), R * 0.28, R * 0.85);
+    v.x += Math.cos(theta) * flute * fade;
+    v.z += Math.sin(theta) * flute * fade;
+    v.y *= 0.92;
+    pos.setXYZ(i, v.x, v.y, v.z);
+  }
+  pos.needsUpdate = true;
+  geo.translate(0, H * 0.42, 0);
+  return organicize(geo, { radial: 0.01, height: 0.01, seed: 11, lockBottom: false });
+}
+
+function isGanache(name) {
+  return /Chocolate|Velvet|Midnight/.test(name);
 }
 
 export async function createPartyScene(canvas, { onGlow, style, unlit = false } = {}) {
@@ -112,6 +297,7 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   const R = look.R;
   const H = look.H;
   const canCut = !!look.cut && (look.shape === 'round' || look.shape === 'tall' || look.shape === 'short' || look.shape === 'taper');
+  const ganache = isGanache(look.name);
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -124,14 +310,19 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = 1.18;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.localClippingEnabled = true;
 
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
-  camera.position.set(0, 1.72, 3.35);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const envRt = pmrem.fromScene(new RoomEnvironment(), 0.06);
+  const envMap = envRt.texture;
 
+  const scene = new THREE.Scene();
+  scene.environment = envMap;
+  if ('environmentIntensity' in scene) scene.environmentIntensity = 0.22;
+
+  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 40);
   const controls = new OrbitControls(camera, canvas);
   controls.enablePan = false;
   controls.enableDamping = true;
@@ -140,23 +331,27 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   controls.maxDistance = 4.6;
   controls.minPolarAngle = 0.7;
   controls.maxPolarAngle = 1.35;
-  controls.target.set(0, 0.48, 0);
   controls.autoRotate = !reduced;
-  controls.autoRotateSpeed = 0.55;
+  controls.autoRotateSpeed = 0.45;
 
-  const hemi = new THREE.HemisphereLight(0xffe6c8, 0x3a2048, 0.7);
-  scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xfff0d8, 1.15);
-  key.position.set(2.4, 4.2, 3.2);
+  scene.add(new THREE.HemisphereLight(0xffe6c8, 0x3a2048, 0.72));
+  const key = new THREE.DirectionalLight(0xfff3e0, 1.4);
+  key.position.set(2.2, 4.4, 3.0);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
+  key.shadow.camera.near = 0.5;
+  key.shadow.camera.far = 14;
+  key.shadow.radius = 4;
   scene.add(key);
-  const fill = new THREE.DirectionalLight(0xc8b8ff, 0.28);
-  fill.position.set(-3, 1.4, -1.5);
+  const fill = new THREE.DirectionalLight(0xc8b8ff, 0.22);
+  fill.position.set(-3, 1.6, -1.2);
   scene.add(fill);
-  const rim = new THREE.DirectionalLight(0xffc8a0, 0.35);
-  rim.position.set(0, 1.2, -3);
+  const rim = new THREE.DirectionalLight(0xffc8a0, 0.32);
+  rim.position.set(0.2, 1.4, -3.2);
   scene.add(rim);
+  const bounce = new THREE.DirectionalLight(0xffe4c8, 0.2);
+  bounce.position.set(0, -2, 1);
+  scene.add(bounce);
   const candleLight = new THREE.PointLight(0xffb14a, 3.4, 8, 1.6);
   candleLight.position.set(0, 1.55, 0);
   scene.add(candleLight);
@@ -164,260 +359,375 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   const party = new THREE.Group();
   party.position.y = unlit ? -0.55 : -2.55;
   scene.add(party);
-  camera.position.set(0, 1.55 + H * 0.45, 3.2 + R * 0.12);
-  controls.target.set(0, 0.28 + H * 0.45, 0);
+  camera.position.set(0, 1.28 + H * 0.32, 3.35 + R * 0.08);
+  controls.target.set(0, 0.22 + H * 0.38, 0);
 
   const marble = new THREE.MeshStandardMaterial({
     map: marbleTexture(),
     color: 0xf7f1e8,
-    roughness: 0.22,
-    metalness: 0.12
+    roughness: 0.28,
+    metalness: 0.08,
+    envMapIntensity: 0.35
   });
-  const metalColor = look.name.includes('Midnight') || look.name.includes('Blueberry') ? 0xc0c8d8 : 0xf0d48a;
+  const metalColor = /Midnight|Blueberry/.test(look.name) ? 0xc0c8d8 : 0xe8c98a;
   const gold = new THREE.MeshStandardMaterial({
     color: metalColor,
-    metalness: 1,
-    roughness: 0.18,
-    emissive: 0x3a2a10,
-    emissiveIntensity: 0.15
+    metalness: 0.92,
+    roughness: 0.28,
+    envMapIntensity: 0.7
   });
 
-  const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.58, 0.06, 64), marble);
+  const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.52, 1.56, 0.055, 64), marble);
   plate.position.y = 0.03;
   plate.receiveShadow = true;
   plate.castShadow = true;
   party.add(plate);
-  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.55, 0.03, 10, 64), gold);
+  const lip = new THREE.Mesh(new THREE.TorusGeometry(1.52, 0.028, 12, 64), gold);
   lip.rotation.x = Math.PI / 2;
-  lip.position.y = 0.06;
+  lip.position.y = 0.055;
   party.add(lip);
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.42, 24), gold);
-  stem.position.y = -0.24;
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.15, 0.4, 24), gold);
+  stem.position.y = -0.22;
   stem.castShadow = true;
   party.add(stem);
-  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.08, 32), gold);
-  foot.position.y = -0.46;
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.6, 0.07, 32), gold);
+  foot.position.y = -0.44;
   party.add(foot);
-  const board = new THREE.Mesh(new THREE.CylinderGeometry(1.38, 1.38, 0.05, 64), gold);
-  board.position.y = 0.085;
+  const board = new THREE.Mesh(new THREE.CylinderGeometry(1.34, 1.36, 0.045, 64), gold);
+  board.position.y = 0.082;
+  board.receiveShadow = true;
   party.add(board);
 
   const cakeGroup = new THREE.Group();
   cakeGroup.position.y = 0.11;
   party.add(cakeGroup);
 
-  const frosting = frostingMat(look);
+  const { map: frostMap, bumpMap } = frostingTextures(look.hex);
+  const frosting = new THREE.MeshPhysicalMaterial({
+    map: frostMap,
+    bumpMap,
+    bumpScale: ganache ? 0.008 : 0.028,
+    color: look.frosting,
+    roughness: ganache ? 0.48 : 0.58,
+    metalness: 0,
+    clearcoat: ganache ? 0.18 : 0.06,
+    clearcoatRoughness: ganache ? 0.45 : 0.82,
+    sheen: ganache ? 0.12 : 1,
+    sheenRoughness: 0.45,
+    sheenColor: new THREE.Color(look.sheen),
+    envMapIntensity: ganache ? 0.22 : 0.22
+  });
   const innerCake = new THREE.MeshPhysicalMaterial({
     color: look.sponge,
-    roughness: 0.7,
-    map: noiseTexture(256, look.hex, 18)
+    roughness: 0.88,
+    map: spongeTexture(look.hex),
+    sheen: 0.2,
+    sheenColor: new THREE.Color(look.sponge)
   });
-  const creamFill = new THREE.MeshPhysicalMaterial({ color: look.cream, roughness: 0.55 });
+  const creamFill = new THREE.MeshPhysicalMaterial({
+    color: look.cream,
+    roughness: 0.55,
+    sheen: 0.6,
+    sheenColor: new THREE.Color(0xfff6ea)
+  });
   innerCake.side = THREE.DoubleSide;
   creamFill.side = THREE.DoubleSide;
 
+  const profileOpts = look.shape === 'taper'
+    ? { top: 0.9, bot: 1.06, bulge: 0.04 }
+    : look.shape === 'tall'
+      ? { top: 0.98, bot: 1.04, bulge: 0.042 }
+      : look.shape === 'short'
+        ? { top: 1, bot: 1.02, bulge: 0.058 }
+        : { top: 1, bot: 1.03, bulge: 0.05 };
+
   if (look.shape === 'heart') {
-    const body = new THREE.Mesh(heartGeometry(R * 0.72, H), frosting);
+    const body = new THREE.Mesh(heartGeometry(R * 0.78, H), frosting);
     body.castShadow = true;
     body.receiveShadow = true;
     cakeGroup.add(body);
   } else if (look.shape === 'bundt') {
-    const body = new THREE.Mesh(new THREE.TorusGeometry(R * 0.62, H * 0.38, 18, 48), frosting);
-    body.rotation.x = Math.PI / 2;
-    body.position.y = H * 0.42;
+    const body = new THREE.Mesh(bundtGeometry(R, H), frosting);
     body.castShadow = true;
+    body.receiveShadow = true;
     cakeGroup.add(body);
   } else if (look.shape === 'square') {
-    const body = new THREE.Mesh(new THREE.BoxGeometry(R * 1.85, H, R * 1.85), frosting);
-    body.position.y = H / 2;
-    body.castShadow = true;
-    cakeGroup.add(body);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(R * 1.82, 0.03, R * 1.82), frosting);
-    top.position.y = H + 0.01;
-    cakeGroup.add(top);
-  } else {
-    const topR = look.shape === 'taper' ? R * 0.9 : R;
-    const botR = look.shape === 'taper' ? R * 1.06 : R * 1.02;
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(topR, botR, H, 80), frosting);
+    const body = new THREE.Mesh(
+      organicize(
+        new RoundedBoxGeometry(R * 1.82, H, R * 1.82, 10, 0.09),
+        { radial: 0.01, height: 0.006, seed: 6.2 }
+      ),
+      frosting
+    );
     body.position.y = H / 2;
     body.castShadow = true;
     body.receiveShadow = true;
     cakeGroup.add(body);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(topR * 0.995, topR * 0.995, 0.035, 80), frosting);
-    top.position.y = H + 0.01;
-    cakeGroup.add(top);
+  } else {
+    const body = new THREE.Mesh(roundCakeGeometry(R, H, profileOpts), frosting);
+    body.castShadow = true;
+    body.receiveShadow = true;
+    cakeGroup.add(body);
   }
 
-  if (look.piped && look.shape !== 'heart' && look.shape !== 'bundt' && look.shape !== 'square') {
-    const piped = new THREE.Mesh(
-      new THREE.TorusGeometry(R * 0.93, 0.055, 14, 80),
-      new THREE.MeshPhysicalMaterial({ color: look.pearl, roughness: 0.28, clearcoat: 0.55 })
-    );
-    piped.rotation.x = Math.PI / 2;
-    piped.position.y = H + 0.04;
-    cakeGroup.add(piped);
-    const basePipe = piped.clone();
-    basePipe.position.y = 0.05;
-    cakeGroup.add(basePipe);
+  const creamMat = new THREE.MeshPhysicalMaterial({
+    color: look.pearl,
+    roughness: 0.42,
+    sheen: 0.7,
+    sheenColor: new THREE.Color(look.sheen),
+    clearcoat: 0.18,
+    envMapIntensity: 0.25
+  });
+
+  function rimPoints(count, radius, y) {
+    const pts = [];
+    if (look.shape === 'square') {
+      const half = R * 0.9;
+      const corner = 0.1;
+      const per = Math.ceil(count / 4);
+      for (let s = 0; s < 4; s++) {
+        for (let i = 0; i < per; i++) {
+          const t = i / per;
+          const a = s * Math.PI / 2;
+          const along = (t - 0.5) * 2 * (half - corner);
+          let x = 0, z = 0;
+          if (s === 0) { x = along; z = half; }
+          if (s === 1) { x = half; z = -along; }
+          if (s === 2) { x = -along; z = -half; }
+          if (s === 3) { x = -half; z = along; }
+          const wobble = n3(x, y, z) * 0.012;
+          pts.push(new THREE.Vector3(x + Math.cos(a) * wobble, y, z + Math.sin(a) * wobble));
+        }
+      }
+    } else if (look.shape === 'heart') {
+      for (let i = 0; i < count; i++) {
+        const t = (i / count) * Math.PI * 2;
+        const sx = 16 * Math.sin(t) ** 3;
+        const sz = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        pts.push(new THREE.Vector3(sx * R * 0.032, y, -sz * R * 0.032));
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * Math.PI * 2;
+        const wobble = 1 + n3(Math.cos(a), 2, Math.sin(a)) * 0.012;
+        pts.push(new THREE.Vector3(Math.cos(a) * radius * wobble, y + n3(i, 1, 2) * 0.008, Math.sin(a) * radius * wobble));
+      }
+    }
+    return pts;
+  }
+
+  if (look.piped) {
+    const y = look.shape === 'bundt' ? H * 0.78 : H + 0.02;
+    const rad = look.shape === 'bundt' ? R * 0.9 : look.shape === 'square' ? R * 0.92 : R * 0.97;
+    if (look.shape !== 'heart' && look.shape !== 'square' && look.shape !== 'bundt') {
+      cakeGroup.add(new THREE.Mesh(icingRope(rad, y, 0.038), creamMat));
+      cakeGroup.add(new THREE.Mesh(icingRope(R * 0.99, 0.05, 0.032), creamMat));
+    }
+    const blobs = rimPoints(look.shape === 'heart' ? 28 : 26, rad, y);
+    const blobGeo = new THREE.SphereGeometry(0.052, 12, 10);
+    blobs.forEach((p, i) => {
+      const m = new THREE.Mesh(blobGeo, creamMat);
+      const s = 0.75 + hash(i + 2) * 0.55;
+      m.scale.set(1.7 * s, 0.38 * s, 1.05 * s);
+      m.position.copy(p);
+      m.lookAt(0, p.y + 0.2, 0);
+      m.rotateZ((hash(i) - 0.5) * 0.5);
+      m.castShadow = true;
+      cakeGroup.add(m);
+    });
   }
 
   if (look.ribbon && look.shape !== 'heart' && look.shape !== 'bundt') {
     const ribbonMat = new THREE.MeshPhysicalMaterial({
       color: look.ribbon,
-      roughness: 0.32,
-      metalness: 0.04,
-      sheen: 0.7,
-      sheenColor: new THREE.Color(look.sheen)
+      roughness: 0.48,
+      metalness: 0.02,
+      sheen: 0.8,
+      sheenColor: new THREE.Color(look.sheen),
+      envMapIntensity: 0.2
     });
+    const bandY = H * 0.4;
     if (look.shape === 'square') {
-      const w = R * 1.85;
-      const bandH = 0.08;
-      const t = 0.03;
-      const y = H * 0.42;
-      const front = new THREE.Mesh(new THREE.BoxGeometry(w + 0.02, bandH, t), ribbonMat);
-      front.position.set(0, y, w / 2);
+      const w = R * 1.82;
+      const t = 0.028;
+      const bh = 0.07;
+      const front = new THREE.Mesh(new THREE.BoxGeometry(w + 0.01, bh, t), ribbonMat);
+      front.position.set(0, bandY, w / 2);
       const back = front.clone();
       back.position.z = -w / 2;
-      const left = new THREE.Mesh(new THREE.BoxGeometry(t, bandH, w + 0.02), ribbonMat);
-      left.position.set(-w / 2, y, 0);
-      const right = left.clone();
+      const side = new THREE.Mesh(new THREE.BoxGeometry(t, bh, w + 0.01), ribbonMat);
+      side.position.set(-w / 2, bandY, 0);
+      const right = side.clone();
       right.position.x = w / 2;
-      cakeGroup.add(front, back, left, right);
+      cakeGroup.add(front, back, side, right);
     } else {
-      const ribbon = new THREE.Mesh(
-        new THREE.CylinderGeometry(R * 1.015, R * 1.015, 0.08, 80),
-        ribbonMat
-      );
-      ribbon.position.y = H * 0.42;
-      cakeGroup.add(ribbon);
+      const sash = new THREE.Mesh(icingRope(R * 1.02, bandY, 0.03), ribbonMat);
+      cakeGroup.add(sash);
     }
-    const bowRing = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.022, 10, 20), gold);
     const bow = new THREE.Group();
-    const loopA = bowRing.clone(); loopA.scale.set(1.1, 0.7, 1); loopA.position.x = -0.08;
-    const loopB = bowRing.clone(); loopB.scale.set(1.1, 0.7, 1); loopB.position.x = 0.08;
-    bow.add(loopA, loopB, new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 12), gold));
-    bow.position.set(0, H * 0.42, look.shape === 'square' ? R * 0.95 : R * 1.02);
+    const loopGeo = new THREE.TorusGeometry(0.075, 0.02, 10, 22);
+    const loopA = new THREE.Mesh(loopGeo, gold);
+    loopA.scale.set(1.15, 0.65, 1);
+    loopA.position.x = -0.07;
+    const loopB = loopA.clone();
+    loopB.position.x = 0.07;
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.028, 12, 12), gold);
+    const tail = new THREE.Mesh(new THREE.CapsuleGeometry(0.012, 0.09, 4, 8), gold);
+    tail.rotation.z = 0.5;
+    tail.position.set(-0.04, -0.06, 0.01);
+    const tail2 = tail.clone();
+    tail2.rotation.z = -0.5;
+    tail2.position.x = 0.04;
+    bow.add(loopA, loopB, knot, tail, tail2);
+    bow.position.set(0, bandY, look.shape === 'square' ? R * 0.94 : R * 1.04);
     cakeGroup.add(bow);
   }
 
-  if (look.pearls && look.shape !== 'heart' && look.shape !== 'bundt') {
-    const pearlGeo = new THREE.SphereGeometry(0.028, 10, 10);
+  if (look.pearls && !look.piped) {
+    const pearlGeo = new THREE.SphereGeometry(0.026, 14, 12);
     const pearlMat = new THREE.MeshPhysicalMaterial({
-      color: look.pearl, roughness: 0.12, metalness: 0.15, clearcoat: 1
+      color: look.pearl,
+      roughness: 0.08,
+      metalness: 0.08,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 0.85
     });
-    const n = look.shape === 'square' ? 24 : 28;
-    for (let i = 0; i < n; i++) {
-      const pearl = new THREE.Mesh(pearlGeo, pearlMat);
-      if (look.shape === 'square') {
-        const side = i % 4;
-        const t = (Math.floor(i / 4) + 0.5) / 6 - 0.5;
-        const d = R * 0.86;
-        const x = side === 0 ? t * 2 * d : side === 2 ? -t * 2 * d : side === 1 ? d : -d;
-        const z = side === 1 ? t * 2 * d : side === 3 ? -t * 2 * d : side === 0 ? d : -d;
-        pearl.position.set(x, H + 0.07, z);
-      } else {
-        const a = (i / n) * Math.PI * 2;
-        pearl.position.set(Math.cos(a) * R * 0.93, H + 0.07, Math.sin(a) * R * 0.93);
-      }
-      cakeGroup.add(pearl);
-    }
+    const pearls = rimPoints(look.shape === 'square' ? 28 : 30, R * 0.93, H + 0.05);
+    pearls.forEach((p, i) => {
+      const m = new THREE.Mesh(pearlGeo, pearlMat);
+      m.scale.setScalar(0.85 + hash(i + 9) * 0.3);
+      m.position.copy(p);
+      m.position.y += 0.01;
+      cakeGroup.add(m);
+    });
   }
 
-  if (look.drip && look.shape !== 'heart' && look.shape !== 'square') {
+  if (look.drip) {
     const dripMat = new THREE.MeshPhysicalMaterial({
       color: look.drip,
-      roughness: 0.12,
-      metalness: 0.22,
-      clearcoat: 0.85,
-      emissive: look.drip,
-      emissiveIntensity: 0.04
+      roughness: 0.16,
+      metalness: 0.04,
+      clearcoat: 0.9,
+      clearcoatRoughness: 0.18,
+      envMapIntensity: 0.7
     });
-    const dGeo = dripGeo();
-    const dripR = look.shape === 'bundt' ? R * 0.95 : R * 0.97;
-    const dripY = look.shape === 'bundt' ? H * 0.7 : H - 0.02;
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2 + 0.08;
-      const drip = new THREE.Mesh(dGeo, dripMat);
-      drip.scale.set(1, 0.85 + ((i * 17) % 10) / 18, 1);
-      drip.position.set(Math.cos(a) * dripR, dripY, Math.sin(a) * dripR);
+    if (look.shape !== 'heart' && look.shape !== 'bundt') {
+      const capR = look.shape === 'square' ? R * 0.82 : R * 0.88;
+      const cap = new THREE.Mesh(ganacheDome(capR, H - 0.01), dripMat);
+      cakeGroup.add(cap);
+    }
+    const nDrip = look.shape === 'square' ? 18 : 22;
+    const spots = rimPoints(nDrip, look.shape === 'bundt' ? R * 0.9 : R * 1.05, look.shape === 'bundt' ? H * 0.72 : H + 0.02);
+    spots.forEach((p, i) => {
+      if (hash(i + 0.3) < 0.12) return;
+      const len = 0.28 + hash(i * 3.1) * 0.32;
+      const width = 0.042 + hash(i * 1.7) * 0.03;
+      const drip = new THREE.Mesh(dripGeo(len, width), dripMat);
+      drip.position.set(p.x, p.y, p.z);
       cakeGroup.add(drip);
-    }
-    if (look.shape !== 'bundt') {
-      const dripRing = new THREE.Mesh(new THREE.TorusGeometry(R * 0.97, 0.028, 10, 64), dripMat);
-      dripRing.rotation.x = Math.PI / 2;
-      dripRing.position.y = H - 0.01;
-      cakeGroup.add(dripRing);
-    }
+    });
   }
 
   if (look.goldLeaf) {
-    const flakeMat = new THREE.MeshStandardMaterial({ color: 0xe6c35c, metalness: 1, roughness: 0.18 });
-    for (let i = 0; i < 9; i++) {
-      const flake = new THREE.Mesh(new THREE.CircleGeometry(0.045 + (i % 3) * 0.01, 5), flakeMat);
-      const a = i * 0.7;
-      flake.position.set(Math.cos(a) * 0.28, H + 0.04, Math.sin(a) * 0.22 - 0.05);
-      flake.rotation.x = -Math.PI / 2;
-      flake.rotation.z = a;
+    const flakeMat = new THREE.MeshStandardMaterial({
+      color: 0xe4c056,
+      metalness: 1,
+      roughness: 0.22,
+      side: THREE.DoubleSide,
+      envMapIntensity: 0.9
+    });
+    for (let i = 0; i < 11; i++) {
+      const shape = new THREE.Shape();
+      const s = 0.035 + hash(i) * 0.03;
+      shape.moveTo(0, s);
+      for (let k = 1; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2 + hash(i * 10 + k) * 0.5;
+        const rr = s * (0.55 + hash(i + k) * 0.7);
+        shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      shape.closePath();
+      const flake = new THREE.Mesh(new THREE.ShapeGeometry(shape), flakeMat);
+      const a = hash(i * 2) * Math.PI * 2;
+      const rr = 0.12 + hash(i + 5) * 0.28;
+      flake.position.set(Math.cos(a) * rr, H + 0.04, Math.sin(a) * rr - 0.04);
+      flake.rotation.set(-Math.PI / 2 + (hash(i) - 0.5) * 0.4, 0, a);
       cakeGroup.add(flake);
     }
   }
 
-  function berry(color, r, x, y, z) {
+  function berry(color, r, x, y, z, squash = 1) {
     const m = new THREE.Mesh(
-      new THREE.SphereGeometry(r, 16, 16),
-      new THREE.MeshPhysicalMaterial({ color, roughness: 0.28, clearcoat: 0.8 })
+      new THREE.SphereGeometry(r, 18, 16),
+      new THREE.MeshPhysicalMaterial({
+        color,
+        roughness: 0.22,
+        clearcoat: 0.85,
+        clearcoatRoughness: 0.2,
+        envMapIntensity: 0.55
+      })
     );
+    m.scale.set(1.05, squash, 0.95);
     m.position.set(x, y, z);
     m.castShadow = true;
     cakeGroup.add(m);
   }
   if (look.berries) {
-    const by = H + 0.07;
-    berry(0x8b1e3f, 0.055, 0.02, by, 0.04);
-    berry(0xa32648, 0.048, 0.09, by - 0.01, -0.02);
-    berry(0x6b1c38, 0.042, -0.06, by, 0.0);
-    berry(0x2a3d6b, 0.032, 0.0, by - 0.01, 0.11);
-    berry(0xc9a227, 0.016, 0.05, by + 0.02, 0.09);
+    const by = H + 0.08;
+    berry(0x8b1e3f, 0.058, 0.03, by, 0.05, 0.9);
+    berry(0xa32648, 0.05, 0.1, by - 0.012, -0.03, 0.92);
+    berry(0x6b1c38, 0.044, -0.07, by - 0.006, 0.01, 0.88);
+    berry(0x7a1836, 0.038, 0.0, by - 0.01, -0.09, 0.9);
+    berry(0x2a3d6b, 0.03, -0.02, by - 0.012, 0.12, 1);
+    berry(0xc9a227, 0.014, 0.06, by + 0.02, 0.1, 1);
+    const leaf = new THREE.Mesh(
+      new THREE.CircleGeometry(0.045, 10),
+      new THREE.MeshPhysicalMaterial({ color: 0x4a7a3a, roughness: 0.55, side: THREE.DoubleSide })
+    );
+    leaf.position.set(-0.11, by - 0.01, 0.06);
+    leaf.rotation.set(-1.1, 0.4, 0.3);
+    cakeGroup.add(leaf);
   }
 
   function flower(x, z, color) {
     const g = new THREE.Group();
-    const petal = new THREE.Mesh(
-      new THREE.CircleGeometry(0.035, 10),
-      new THREE.MeshPhysicalMaterial({ color, roughness: 0.4, side: THREE.DoubleSide })
-    );
-    for (let i = 0; i < 5; i++) {
-      const p = petal.clone();
-      const a = (i / 5) * Math.PI * 2;
-      p.position.set(Math.cos(a) * 0.028, 0, Math.sin(a) * 0.028);
-      p.rotation.x = -Math.PI / 2.2;
+    const petalMat = new THREE.MeshPhysicalMaterial({
+      color, roughness: 0.45, sheen: 0.5, sheenColor: new THREE.Color(color), side: THREE.DoubleSide
+    });
+    const petalGeo = new THREE.SphereGeometry(0.038, 10, 8);
+    for (let i = 0; i < 6; i++) {
+      const p = new THREE.Mesh(petalGeo, petalMat);
+      const a = (i / 6) * Math.PI * 2;
+      p.scale.set(0.55, 0.22, 1.05);
+      p.position.set(Math.cos(a) * 0.032, 0.008, Math.sin(a) * 0.032);
+      p.lookAt(0, 0.04, 0);
       g.add(p);
     }
     g.add(new THREE.Mesh(
-      new THREE.SphereGeometry(0.016, 10, 10),
-      new THREE.MeshStandardMaterial({ color: 0xf2d36b })
+      new THREE.SphereGeometry(0.016, 10, 8),
+      new THREE.MeshStandardMaterial({ color: 0xf2d36b, roughness: 0.4 })
     ));
-    g.position.set(x, H + 0.05, z);
+    g.position.set(x, H + 0.055, z);
+    g.rotation.y = hash(x + z) * 6;
     cakeGroup.add(g);
   }
   if (look.flowers) {
-    flower(0.22, 0.18, look.ribbon || 0xf4c4d0);
-    flower(-0.2, 0.16, 0xf8e6c8);
-    flower(0.18, -0.2, 0xd8ead0);
-    flower(-0.16, -0.18, look.cream);
+    flower(0.24, 0.16, look.ribbon || 0xf4c4d0);
+    flower(-0.22, 0.14, 0xf8e6c8);
+    flower(0.16, -0.22, 0xd8ead0);
+    flower(-0.14, -0.18, look.cream);
+    flower(0.02, 0.28, 0xf4b8c5);
   }
 
   if (look.sprinkles) {
-    const cols = [0xf4b8c5, 0xe8c97a, 0xb7cbb0, 0xc5d0e8, 0xffffff, 0xe0899a];
-    for (let i = 0; i < 70; i++) {
-      const bit = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.012, 0.012, 0.05, 5),
-        new THREE.MeshStandardMaterial({ color: cols[i % cols.length] })
-      );
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * R * 0.75;
-      bit.position.set(Math.cos(a) * r, H + 0.04, Math.sin(a) * r);
-      bit.rotation.set(Math.random(), Math.random(), Math.random());
+    const cols = [0xf4b8c5, 0xe8c97a, 0xb7cbb0, 0xc5d0e8, 0xffffff, 0xe0899a, 0xf5c07a];
+    const rod = new THREE.CapsuleGeometry(0.007, 0.038, 3, 6);
+    for (let i = 0; i < 110; i++) {
+      const bit = new THREE.Mesh(rod, new THREE.MeshStandardMaterial({ color: cols[i % cols.length], roughness: 0.35 }));
+      const a = hash(i) * Math.PI * 2;
+      const r = Math.sqrt(hash(i + 1)) * R * 0.78;
+      bit.position.set(Math.cos(a) * r, H + 0.035, Math.sin(a) * r);
+      bit.rotation.set(hash(i + 2) * 1.2, hash(i + 3) * 6, hash(i + 4) * 1.2);
       cakeGroup.add(bit);
     }
   }
@@ -425,19 +735,26 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   if (look.macarons) {
     const macCols = [look.ribbon || 0xf4c4d0, look.drip || 0xe8c97a, 0xd8ead0, 0xc5d0e8];
     for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
+      const a = (i / 8) * Math.PI * 2 + 0.1;
       const g = new THREE.Group();
       const col = macCols[i % macCols.length];
-      const shell = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.45 });
-      const top = new THREE.Mesh(new THREE.SphereGeometry(0.07, 12, 8, 0, 6.3, 0, 1.4), shell);
-      top.position.y = 0.04;
+      const shell = new THREE.MeshPhysicalMaterial({
+        color: col, roughness: 0.48, sheen: 0.4, sheenColor: new THREE.Color(col)
+      });
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.072, 16, 10, 0, Math.PI * 2, 0, 1.45), shell);
+      top.position.y = 0.042;
+      top.scale.y = 0.72;
       const bot = top.clone();
       bot.rotation.x = Math.PI;
-      bot.position.y = 0;
-      const fill = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.03, 12), creamFill);
-      fill.position.y = 0.02;
-      g.add(top, bot, fill);
-      g.position.set(Math.cos(a) * R * 0.72, H + 0.02, Math.sin(a) * R * 0.72);
+      bot.position.y = 0.002;
+      const fill = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.058, 0.028, 16), creamFill);
+      fill.position.y = 0.022;
+      const foot = new THREE.Mesh(new THREE.TorusGeometry(0.062, 0.008, 8, 20), shell);
+      foot.rotation.x = Math.PI / 2;
+      foot.position.y = 0.012;
+      g.add(top, bot, fill, foot);
+      g.position.set(Math.cos(a) * R * 0.7, H + 0.02, Math.sin(a) * R * 0.7);
+      g.rotation.y = a;
       cakeGroup.add(g);
     }
   }
@@ -446,16 +763,14 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   sliceGroup.visible = false;
   if (canCut) {
     const sliceAngle = 0.42;
-    const topR = look.shape === 'taper' ? R * 0.9 : R;
-    const botR = look.shape === 'taper' ? R * 1.06 : R * 1.02;
+    const pts = cakeProfile(R, H, profileOpts);
     const sliceBody = new THREE.Mesh(
-      new THREE.CylinderGeometry(topR, botR, H, 24, 1, false, -sliceAngle / 2, sliceAngle),
+      new THREE.LatheGeometry(pts, 16, -sliceAngle / 2, sliceAngle),
       frosting
     );
-    sliceBody.position.y = H / 2;
     sliceGroup.add(sliceBody);
     function radialFace(angle, material) {
-      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(R, H), material);
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(R * 1.05, H * 1.08), material);
       mesh.position.set(Math.cos(angle) * (R / 2), H / 2, Math.sin(angle) * (R / 2));
       mesh.rotation.y = -angle;
       return mesh;
@@ -465,10 +780,11 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   }
   cakeGroup.add(sliceGroup);
 
-  const candleBodyGeo = new THREE.CylinderGeometry(0.018, 0.022, 1, 10);
-  const wickGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.045, 6);
-  const flameOuterGeo = teardrop(0.028, 0.09, 10);
-  const flameInnerGeo = teardrop(0.014, 0.06, 8);
+  const candleBodyGeo = new THREE.CylinderGeometry(0.016, 0.021, 1, 12);
+  const wickGeo = new THREE.CylinderGeometry(0.0028, 0.0028, 0.05, 6);
+  const capGeo = new THREE.SphereGeometry(0.018, 10, 8);
+  const flameOuterGeo = teardrop(0.026, 0.085, 10);
+  const flameInnerGeo = teardrop(0.013, 0.055, 8);
   const wickMat = new THREE.MeshStandardMaterial({ color: 0x2a1c14 });
   const flameOuterMat = new THREE.MeshBasicMaterial({
     color: 0xff7a28, transparent: true, opacity: 0.72,
@@ -483,45 +799,74 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
   const placements = [];
   if (look.shape === 'bundt') {
     for (let i = 0; i < CANDLE_COUNT; i++) {
-      const a = (i / CANDLE_COUNT) * Math.PI * 2;
-      placements.push({ x: Math.cos(a) * R * 0.62, z: Math.sin(a) * R * 0.62, h: 0.2 + (i % 5) * 0.01 });
+      const a = (i / CANDLE_COUNT) * Math.PI * 2 + 0.03;
+      placements.push({
+        x: Math.cos(a) * R * 0.58,
+        z: Math.sin(a) * R * 0.58,
+        h: 0.19 + hash(i) * 0.07,
+        lean: (hash(i + 4) - 0.5) * 0.16
+      });
     }
   } else {
     const outerN = 17;
     const innerN = 12;
-    const outerRad = look.shape === 'square' ? R * 0.7 : look.shape === 'heart' ? R * 0.4 : R * 0.66;
-    const innerRad = look.shape === 'heart' ? R * 0.2 : R * 0.38;
+    const outerRad = look.shape === 'square' ? R * 0.68 : look.shape === 'heart' ? R * 0.38 : R * 0.64;
+    const innerRad = look.shape === 'heart' ? R * 0.18 : R * 0.36;
     for (let i = 0; i < outerN; i++) {
       const a = (i / outerN) * Math.PI * 2 + 0.05;
-      placements.push({ x: Math.cos(a) * outerRad, z: Math.sin(a) * outerRad, h: 0.22 + (i % 5) * 0.012 });
+      const jitter = 0.97 + hash(i) * 0.06;
+      placements.push({
+        x: Math.cos(a) * outerRad * jitter,
+        z: Math.sin(a) * outerRad * jitter,
+        h: 0.18 + hash(i + 1) * 0.07,
+        lean: (hash(i + 8) - 0.5) * 0.18
+      });
     }
     for (let i = 0; i < innerN; i++) {
       const a = (i / innerN) * Math.PI * 2 + 0.22;
-      placements.push({ x: Math.cos(a) * innerRad, z: Math.sin(a) * innerRad, h: 0.2 + (i % 4) * 0.01 });
+      const jitter = 0.96 + hash(i + 20) * 0.07;
+      placements.push({
+        x: Math.cos(a) * innerRad * jitter,
+        z: Math.sin(a) * innerRad * jitter,
+        h: 0.16 + hash(i + 3) * 0.065,
+        lean: (hash(i + 12) - 0.5) * 0.16
+      });
     }
   }
 
   placements.forEach((p, i) => {
     const g = new THREE.Group();
     const h = p.h;
-    const wax = new THREE.MeshStandardMaterial({ color: look.wax[i % look.wax.length], roughness: 0.42 });
+    const wax = new THREE.MeshPhysicalMaterial({
+      color: look.wax[i % look.wax.length],
+      roughness: 0.38,
+      sheen: 0.25,
+      sheenColor: new THREE.Color(look.wax[i % look.wax.length])
+    });
     const bodyC = new THREE.Mesh(candleBodyGeo, wax);
-    bodyC.scale.y = h;
+    const thick = 0.82 + hash(i + 6) * 0.38;
+    bodyC.scale.set(thick, h, thick);
     bodyC.position.y = h / 2;
     bodyC.castShadow = true;
     g.add(bodyC);
+    const cap = new THREE.Mesh(capGeo, wax);
+    cap.scale.y = 0.42;
+    cap.position.y = h;
+    g.add(cap);
     const wick = new THREE.Mesh(wickGeo, wickMat);
-    wick.position.y = h + 0.02;
+    wick.position.y = h + 0.022;
     g.add(wick);
     const flame = new THREE.Group();
     flame.add(new THREE.Mesh(flameOuterGeo, flameOuterMat.clone()));
     const fi = new THREE.Mesh(flameInnerGeo, flameInnerMat.clone());
     fi.position.y = 0.012;
     flame.add(fi);
-    flame.position.y = h + 0.03;
+    flame.position.y = h + 0.028;
     g.add(flame);
-    const yOff = look.shape === 'bundt' ? H * 0.72 : H + 0.02;
+    const yOff = look.shape === 'bundt' ? H * 0.7 : H + 0.018;
     g.position.set(p.x, yOff, p.z);
+    g.rotation.z = p.lean;
+    g.rotation.x = p.lean * 0.4;
     cakeGroup.add(g);
     const startLit = !unlit;
     flame.visible = startLit;
@@ -671,9 +1016,13 @@ export async function createPartyScene(canvas, { onGlow, style, unlit = false } 
           if (!m || seenMat.has(m)) return;
           seenMat.add(m);
           if (m.map) m.map.dispose();
+          if (m.bumpMap) m.bumpMap.dispose();
           m.dispose();
         });
       });
+      envMap.dispose();
+      envRt.dispose();
+      pmrem.dispose();
       renderer.dispose();
     }
   };

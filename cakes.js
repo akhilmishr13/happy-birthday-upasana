@@ -39,6 +39,11 @@ export function styleFromId(id) {
 }
 
 export function pickCakeStyle() {
+  const forced = Number(new URLSearchParams(location.search).get('cake'));
+  if (Number.isFinite(forced) && forced >= 0) {
+    localStorage.setItem('hb-cake-style', String(forced % CAKE_STYLE_COUNT));
+    return styleFromId(forced);
+  }
   const last = Number(localStorage.getItem('hb-cake-style') ?? -1);
   let id = Math.floor(Math.random() * CAKE_STYLE_COUNT);
   if (id === last) id = (id + 7) % CAKE_STYLE_COUNT;
